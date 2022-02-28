@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# i3-switch-sp [-s] [-a] workspace [startup command]
+# switch workspace like xnonad/qtile
+
+# Description
+# Target workspace not found: spawn workspace and exec startup command
+# Target workspace focused: do nothing
+# Target workspace not focused but visible: swap current and target workspace
+# Target workspace not focused and unvisible: move target workspace onto current monitor
+
+# -s: dont swap when target visible
+# -a: automatic workspace back_and_forth when target is currently focused
+
+# Example:
+# $ i3-switch-sp {1-9}
+# $ i3-switch-sp 10 "$TERMINAL --title vimwiki -e nvim $HOME/vimwiki/index.md
+
+
+
+declare -A option
+option[swap]=true
+option[autoback]=false
+
+while true; do
+    case "$1" in
+        -s )
+            option[swap]=false
+            shift 1
+            ;;
+        -a )
+            option[autoback]=true
+            shift 1
+            ;;
+        * )
+            break
+            ;;
+    esac
+done
+
+declare -A target
+target[workspace]=$1
+target[output]=$(i3-msg -t get_workspaces | sed 's/{/\n{/g' |\
+    grep -e "\"num\":$1," -A 1 | sed 's/,/\n/g' |\
+    grep '"output"' | awk -F\" '{print $4}')
+target[visible]=$(i3-msg -t get_workspaces | sed 's/{/\n{/g' |\
+    grep -e "\"num\":$1," -A 1 | sed 's/,/\n/g' |\
+    grep '"visible"' | awk -F: '{print $2}')
+
+declare -A current
+current[workspace]=$(i3-msg -t get_workspaces | sed 's/{/\n{/g' |\
+    grep '"focused":true' -A 1 | sed 's/,/\n/g' |\
+    grep '"num"' | sed 's/"num"://g')
+current[output]=$(i3-msg -t get_workspaces | sed 's/{/\n{/g' |\
+    grep '"focused":true' -A 1 | sed 's/,/\n/g' |\
+    grep '"output"' | awk -F\" '{print $4}')
+
+
+
+if [ -z ${target[output]} ]; then
+    # if target not found
+    # spwan workspace and exec startup command
+    i3-msg workspace ${target[workspace]}
+    $2 &
+
+else
+
+    # target is currently focused
+    if [ ${current[workspace]} == ${target[workspace]} ]; then
+
+        if [ ${option[autoback]} == 'true' ]; then
+            i3-msg workspace back_and_forth
+        fi
+
+    else
+
+        if [ ${current[output]} != ${target[output]} ];
+        then
+            # move target workspace to current monitor
+            i3-msg workspace ${target[workspace]}
+            i3-msg move workspace to output ${current[output]}
+
+            i3-msg workspace ${current[workspace]}
+            # if target and current workspace on diff monitor and visible,
+            # move current workspace to target monitor
+            if [ ${option[swap]} == 'true' ] && [ ${target[visible]} == 'true' ];then
+                i3-msg move workspace to output ${target[output]}
+            fi
+
+        fi
+
+        # focus on target workspace
+        i3-msg workspace ${target[workspace]}
+    fi
+
+fi
