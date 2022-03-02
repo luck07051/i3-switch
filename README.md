@@ -1,6 +1,6 @@
 ## Description
 
-Workspace switcher for i3wm that emulates XMonad/Qtile.
+A scripts let i3 switch workspace like XMonad/Qtile
 
 
 ## Usage
